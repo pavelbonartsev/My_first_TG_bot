@@ -1,70 +1,85 @@
-#!/usr/bin/python
-
-# This is a simple echo bot using the decorator mechanism.
-# It echoes any incoming text messages.
-
 import telebot
-import config
-import letters
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import json
+import os
 
-API_TOKEN = config.token
-bot = telebot.TeleBot(API_TOKEN)
-e_letters = letters.e_letters
-r_letters = letters.r_letters
-FLAG = False
+token = '7206783181:AAEJZVB9YZXWnNTHPwi9HY1MInv9wBEc82w'
+bot = telebot.TeleBot(token)
 
+data_file = 'data.json'
 
-# Handle '/start'
+def load_data():
+    if os.path.exists(data_file):
+        with open(data_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+def save_data(data):
+    with open(data_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f)
+
+def create_keyboard():
+    keyboard = InlineKeyboardMarkup()
+    button_start = InlineKeyboardButton("Старт", callback_data='start')
+    button_help = InlineKeyboardButton("Помощь", callback_data='help')
+    button_cezar = InlineKeyboardButton("Шифр Цезаря", callback_data='cezar')
+    keyboard.add(button_start, button_help, button_cezar)
+    return keyboard
+
 @bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, """\
-Привет, я ЦезарьБот.
-Я здесь, чтобы зашифровать или расшифровать ваше сообщение. Просто напишите что-нибудь и я зашифрую ваше сообщение!\
-""")
+def start_message(message):
+    bot.send_message(message.chat.id, "Привет!", reply_markup=create_keyboard())
 
-
-# Handle '/help'
 @bot.message_handler(commands=['help'])
-def send_welcome(message):
-    bot.reply_to(message, """\
-- напиши текст и я его зашифрую;\n- напиши зашифрованный текст и его расшифрую.\
-""")
+def help(message):
+    bot.send_message(message.chat.id, "/start - старт работы с ботом\n/help - помощь\n/cezar - шифрование текста по шифру Цезаря\n", reply_markup=create_keyboard())
 
+@bot.message_handler(commands=['cezar'])
+def byCezar(message):
+    bot.send_message(message.chat.id, "Введите текст...", reply_markup=create_keyboard())
+    bot.register_next_step_handler(message, cezar_2)
 
-# Handle '/encode'
-@bot.message_handler(commands=['encode'])
-def com_encode(message):
-    global FLAG
-    FLAG = True
-    bot.reply_to(message,"Напишите текст, котрый вы хотите зашифровать:")
+@bot.message_handler(content_types=['photo'])
+def photo(message):   
+    fileID = message.photo[-1].file_id   
+    file_info = bot.get_file(fileID)
+    downloaded_file = bot.download_file(file_info.file_path)
+    with open("image.jpg", 'wb') as new_file:
+        new_file.write(downloaded_file)
+    bot.send_photo(message.chat.id, downloaded_file)
 
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == 'start':
+        start_message(call.message)
+    elif call.data == 'help':
+        help(call.message)
+    elif call.data == 'cezar':
+        byCezar(call.message)
 
-# Handle all other messages with content_type 'text' (content_types defaults to ['text'])
-@bot.message_handler(content_types=["text"])
-def encoded_message(message):
-    global FLAG
-    if FLAG:
-        list_message = list(message.text)
-        message1 = ""
-        for x in list_message:
-            if x in r_letters:
-                message1 += r_letters[int(r_letters.index(x) + 3) % (len(r_letters) - 1)]
-            else:
-                message1 += x
-            
-#       elif list_message[0] in e_letters:
-#           list_message = [e_letters[int(e_letters.index(x) + 3) % (len(e_letters) - 1)] if x in list_message else x for x in list_message]
+def cezar_2(message):
+    user_data = load_data()
+    user_id = message.from_user.id
     
-        bot.reply_to(message, message1.text)
-        FLAG = False
-    else:
-        bot.reply_to(message, "ДабудтДабудай, вы просто вводите текст")
+    user_data[user_id] = message.text
+    save_data(user_data)
+    
+    bot.send_message(message.chat.id, cezar(message.text))
 
+def cezar(st):
+    newSt = ""
+    for i in st: 
+        if i == "я":
+            newSt += "а"
+        elif i == "Я":
+            newSt += "А"
+        elif i == "Z":
+            newSt += "A"
+        elif i == "z":
+            newSt += "а"
+        else:
+            newSt += chr(ord(i) + 1)
+    return newSt
 
-# Handle all other messages with content_type 'text' (content_types defaults to ['text'])
-# @bot.message_handler(func=lambda message: True)
-# def echo_message(message):
-#     bot.reply_to(message, message.text)
-
-
-bot.infinity_polling()
+if __name__ == '__main__':
+    bot.infinity_polling()
